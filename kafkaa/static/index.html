@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Microservices Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      margin: 0;
+      padding: 40px 20px;
+      box-sizing: border-box;
+    }
+    .wrapper {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 860px;
+    }
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      width: 400px;
+      flex-shrink: 0;
+    }
+    .monitor {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      flex: 1;
+      min-width: 200px;
+    }
+    h2 { margin-top: 0; color: #333; }
+    h3 { margin: 0 0 16px; color: #555; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; }
+    input[type="number"] {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover { background: #4338ca; }
+    pre {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #333;
+      min-height: 60px;
+      border: 1px solid #eee;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Monitoring panel */
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { color: #666; }
+    .stat-value {
+      font-weight: 600;
+      color: #333;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-value.ok  { color: #16a34a; }
+    .stat-value.err { color: #dc2626; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.up   { background: #dcfce7; color: #15803d; }
+    .badge.down { background: #fee2e2; color: #b91c1c; }
+    .refresh-btn {
+      width: 100%;
+      padding: 8px;
+      margin-top: 14px;
+      background: #f8f9fa;
+      color: #555;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .refresh-btn:hover { background: #eee; }
+    .section-sep { margin: 16px 0 12px; border: none; border-top: 1px solid #eee; }
+    .links { margin-top: 14px; font-size: 12px; color: #888; }
+    .links a { color: #4f46e5; text-decoration: none; margin-right: 10px; }
+    .links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- Panneau principal -->
+    <div class="container">
+      <h2> Microservices Demo</h2>
+      <input type="number" id="userId" value="1" min="1" max="2" placeholder="User ID (1 ou 2)">
+      <button onclick="loadData()">Load Data</button>
+      <pre id="result">Entrez un ID et cliquez Load Data...</pre>
+    </div>
+
+    <!-- Panneau monitoring -->
+    <div class="monitor">
+      <h3> Monitoring</h3>
+
+      <div class="stat-row">
+        <span class="stat-label">Gateway</span>
+        <span id="gw-status" class="badge">…</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Users Service</span>
+        <span id="us-status" class="badge">…</span>
+      </div>
+
+      <hr class="section-sep">
+
+      <div class="stat-row">
+        <span class="stat-label">Requêtes envoyées</span>
+        <span id="stat-sent" class="stat-value">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Succès</span>
+        <span id="stat-ok" class="stat-value ok">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Erreurs</span>
+        <span id="stat-err" class="stat-value err">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Durée dernière req.</span>
+        <span id="stat-duration" class="stat-value">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Retries Kafka</span>
+        <span id="stat-retries" class="stat-value">0</span>
+      </div>
+
+      <button class="refresh-btn" onclick="refreshHealth()">↻ Rafraîchir</button>
+
+      <div class="links">
+        <a href="http://localhost:9090" target="_blank">Prometheus</a>
+        <a href="http://localhost:3000" target="_blank">Grafana</a>
+        <a href="http://localhost:8000/metrics" target="_blank">Métriques brutes</a>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Compteurs locaux (complètent les métriques Prometheus)
+    let sent = 0, ok = 0, err = 0, retries = 0;
+
+    async function loadData() {
+      const userId = document.getElementById('userId').value;
+      document.getElementById('result').textContent = 'Chargement...';
+
+      sent++;
+      document.getElementById('stat-sent').textContent = sent;
+
+      const t0 = performance.now();
+      try {
+        const response = await fetch(`http://localhost:8002/api/users/${userId}`);
+        const data = await response.json();
+        const duration = ((performance.now() - t0) / 1000).toFixed(2) + 's';
+
+        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        document.getElementById('stat-duration').textContent = duration;
+
+        if (data.error) {
+          err++;
+          document.getElementById('stat-err').textContent = err;
+        } else {
+          ok++;
+          document.getElementById('stat-ok').textContent = ok;
+        }
+      } catch (error) {
+        err++;
+        document.getElementById('stat-err').textContent = err;
+        document.getElementById('result').textContent = 'Erreur : ' + error.message;
+        document.getElementById('stat-duration').textContent = '—';
+      }
+    }
+
+    async function checkHealth(url, badgeId) {
+      const badge = document.getElementById(badgeId);
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+        if (res.ok) {
+          badge.textContent = 'UP';
+          badge.className = 'badge up';
+        } else {
+          throw new Error();
+        }
+      } catch {
+        badge.textContent = 'DOWN';
+        badge.className = 'badge down';
+      }
+    }
+
+    async function refreshHealth() {
+      await Promise.all([
+        checkHealth('http://localhost:8002/health', 'gw-status'),
+        checkHealth('http://localhost:8000/health', 'us-status'),
+      ]);
+    }
+
+    // Rafraîchissement automatique toutes les 10s
+    refreshHealth();
+    setInterval(refreshHealth, 10000);
+  </script>
+</body>
+</html>
